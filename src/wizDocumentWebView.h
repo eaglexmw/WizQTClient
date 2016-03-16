@@ -35,7 +35,7 @@ class CWizDocumentWebViewLoaderThread : public QThread
 {
     Q_OBJECT
 public:
-    CWizDocumentWebViewLoaderThread(CWizDatabaseManager& dbMgr);
+    CWizDocumentWebViewLoaderThread(CWizDatabaseManager& dbMgr, QObject* parent);
 
     void load(const WIZDOCUMENTDATA& doc);
     //
@@ -63,7 +63,7 @@ class CWizDocumentWebViewSaverThread : public QThread
 {
     Q_OBJECT
 public:
-    CWizDocumentWebViewSaverThread(CWizDatabaseManager& dbMgr);
+    CWizDocumentWebViewSaverThread(CWizDatabaseManager& dbMgr, QObject* parent);
 
     void save(const WIZDOCUMENTDATA& doc, const QString& strHtml,
               const QString& strHtmlFile, int nFlags);
@@ -127,9 +127,13 @@ public:
     void setEditingDocument(bool editing);
     void saveDocument(const WIZDOCUMENTDATA& data, bool force);
     void reloadNoteData(const WIZDOCUMENTDATA& data);
+    void closeDocument(const WIZDOCUMENTDATA& doc);
 
     bool isInited() const { return m_bEditorInited; }
     bool isEditing() const { return m_bEditingMode; }
+
+    void setInSeperateWindow(bool inSeperateWindow);
+    bool isInSeperateWindow() const;
 
     Q_INVOKABLE QString currentNoteGUID();
     Q_INVOKABLE QString currentNoteHtml();
@@ -142,11 +146,19 @@ public:
     // initialize editor style before render, only invoke once.
     bool resetDefaultCss();
     Q_INVOKABLE QString getDefaultCssFilePath() const;
+    Q_INVOKABLE QString getWizReaderDependencyFilePath() const;
+    Q_INVOKABLE QString getWizReaderFilePath() const;
+    Q_INVOKABLE QString getMarkdownCssFilePath() const;
+    void resetMarkdownCssPath();
 
     /* editor related */
     void editorResetFont();
     void editorFocus();
     void setEditorEnable(bool enalbe);
+
+    void setIgnoreActiveWindowEvent(bool igoreEvent);
+
+    bool evaluateJavaScript(const QString& js);
 
     // -1: command invalid
     // 0: available
@@ -163,43 +175,58 @@ public:
 
     bool editorCommandQueryMobileFileReceiverState();
 
+    bool editorCommandExecuteParagraph(const QString& strType);
     bool editorCommandExecuteFontFamily(const QString& strFamily);
     bool editorCommandExecuteFontSize(const QString& strSize);
     bool editorCommandExecuteInsertHtml(const QString& strHtml, bool bNotSerialize);
 
-    void on_editorCommandPastePlainText_triggered();
+    void setPastePlainTextEnable(bool bEnable);
     //
-    void saveAsPDF(const QString& strFileName);
+    void saveAsPDF();
     void saveAsHtml(const QString& strDirPath);
     void printDocument();
+    void shareNoteByEmail();
+    void shareNoteByLink();
     bool findIMGElementAt(QPoint point, QString& strSrc);
     //
     Q_INVOKABLE bool isContentsChanged() { return m_bContentsChanged; }
-    Q_INVOKABLE void setContentsChanged(bool b) { m_bContentsChanged = b; }
+    Q_INVOKABLE void setContentsChanged(bool b);
 
     //use undo func provied by editor
     void undo();
     void redo();
 
+    //js environment func
+    Q_INVOKABLE QString getSkinResourcePath();
+    Q_INVOKABLE QString getUserAvatarFilePath(int size);
+    Q_INVOKABLE QString getUserAlias();
+    Q_INVOKABLE QString getFormatedDateTime();
+    Q_INVOKABLE bool isPersonalDocument();
+    Q_INVOKABLE QString getCurrentNoteHtml();
+    Q_INVOKABLE void saveHtmlToCurrentNote(const QString& strHtml, const QString& strResource);
+    Q_INVOKABLE bool hasEditPermissionOnCurrentNote();
+    Q_INVOKABLE void setCurrentDocumentType(const QString& strType);
+    Q_INVOKABLE bool checkListClickable();
     //
     QNetworkDiskCache* networkCache();
 
 private:
     void initEditor();
+    void resetEditor();
     void viewDocumentInEditor(bool editing);
-    void tryResetTitle();
+    void viewDocumentWithoutEditor();
+    void tryResetTitle();    
 
     bool isInternalUrl(const QUrl& url);
-    void viewDocumentByUrl(const QUrl& url);
-
-    void splitHtmlToHeadAndBody(const QString& strHtml, QString& strHead, QString& strBody);
-
+    void viewDocumentByUrl(const QString& strUrl);
+    void viewAttachmentByUrl(const QString& strKbGUID, const QString& strUrl);
     //
     void saveEditingViewDocument(const WIZDOCUMENTDATA& data, bool force);
-    void saveReadingViewDocument(const WIZDOCUMENTDATA& data, bool force);
+    void saveReadingViewDocument(const WIZDOCUMENTDATA& data, bool force);    
 
 protected:
     virtual void keyPressEvent(QKeyEvent* event);
+    virtual void mousePressEvent(QMouseEvent* event);
     virtual void inputMethodEvent(QInputMethodEvent* event);
     virtual void focusInEvent(QFocusEvent* event);
     virtual void focusOutEvent(QFocusEvent* event);
@@ -207,13 +234,12 @@ protected:
     virtual void dragEnterEvent(QDragEnterEvent* event);
     virtual void dragMoveEvent(QDragMoveEvent* event);
     virtual void dropEvent(QDropEvent* event);
+    virtual void wheelEvent(QWheelEvent* ev);
 
 private:
     CWizExplorerApp& m_app;
     CWizDatabaseManager& m_dbMgr;
     QMap<QString, QString> m_mapFile;
-
-    QString m_strDefaultCssFilePath;
 
     QWebFrame* m_noteFrame;
 
@@ -229,14 +255,22 @@ private:
     bool m_bCurrentEditing;
     //
     bool m_bContentsChanged;
+    //
+    bool m_ignoreActiveWindowEvent;
 
-    CWizDocumentTransitionView* m_transitionView;
+    // flag : if current webview is in seperate window, editor background-color will
+    //different with webview in mainwindow
+    bool m_bInSeperateWindow;
+    QString m_strDefaultCssFilePath;
+    QString m_strMarkdownCssFilePath;
+
+    int m_nWindowID;
+
     CWizDocumentWebViewLoaderThread* m_docLoadThread;
     CWizDocumentWebViewSaverThread* m_docSaverThread;
 
     QPointer<CWizEditorInsertLinkForm> m_editorInsertLinkForm;
     QPointer<CWizEditorInsertTableForm> m_editorInsertTableForm;
-    QPointer<QColorDialog> m_colorDialog;
 
     CWizSearchReplaceWidget* m_searchReplaceWidget;
 
@@ -251,7 +285,6 @@ public Q_SLOTS:
     void onEditorLinkClicked(const QUrl& url);
     void onEditorContentChanged();
     void onEditorSelectionChanged();
-    void clearEditorHeight();
 
     void onTimerAutoSaveTimout();
 
@@ -271,10 +304,8 @@ public Q_SLOTS:
     /* editor API */
 
     // font
-    void editorCommandExecuteBackColor();
-    void on_editorCommandExecuteBackColor_accepted(const QColor& color);
-    void editorCommandExecuteForeColor();
-    void on_editorCommandExecuteForeColor_accepted(const QColor& color);
+    void editorCommandExecuteBackColor(const QColor& color);
+    void editorCommandExecuteForeColor(const QColor& color);
     bool editorCommandExecuteBold();
     bool editorCommandExecuteItalic();
     bool editorCommandExecuteUnderLine();
@@ -324,6 +355,15 @@ public Q_SLOTS:
     bool editorCommandExecuteTableSplitCols();
     bool editorCommandExecuteTableAverageRows();
     bool editorCommandExecuteTableAverageCols();
+    bool editorCommandExecuteTableCellAlignLeftTop();
+    bool editorCommandExecuteTableCellAlignTop();
+    bool editorCommandExecuteTableCellAlignRightTop();
+    bool editorCommandExecuteTableCellAlignLeft();
+    bool editorCommandExecuteTableCellAlignCenter();
+    bool editorCommandExecuteTableCellAlignRight();
+    bool editorCommandExecuteTableCellAlignLeftBottom();
+    bool editorCommandExecuteTableCellAlignBottom();
+    bool editorCommandExecuteTableCellAlignRightBottom();
 
     // fast operation
     bool editorCommandExecuteInsertDate();
@@ -346,6 +386,7 @@ public Q_SLOTS:
 #endif
 
     // js func
+    void resetCheckListEnvironment();
     void initCheckListEnvironment();
 
 Q_SIGNALS:
@@ -356,15 +397,27 @@ Q_SIGNALS:
     void focusIn();
     void focusOut();
     //
+    void contentsChanged();
 
-    void requestShowContextMenu(const QPoint& pos);
 
+    void showContextMenuRequest(const QPoint& pos);
+    void updateEditorToolBarRequest();
     //
     void viewDocumentFinished();
+    //
+    void shareDocumentByLinkRequest(const QString& strKbGUID, const QString& strGUID);
+
+    // signal connect to checklist in javascript
+    void clickingTodoCallBack(bool cancel, bool needCallAgain);
 
 private:
     void setWindowVisibleOnScreenShot(bool bVisible);
     bool insertImage(const QString& strFileName, bool bCopyFile);
+    void closeSourceMode();
+    void addAttachmentThumbnail(const QString strFile, const QString& strGuid);
+    void openVipPageInWebBrowser();
+
+    QString getMailSender();
 };
 
 #endif // WIZDOCUMENTWEBVIEW_H

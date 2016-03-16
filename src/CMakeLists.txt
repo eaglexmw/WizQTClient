@@ -11,6 +11,10 @@ set(wiznote_SOURCES_MAC
     mac/wizUserInfoWidgetBaseMac.mm
     mac/wizUserInfoWidgetBaseMac_mm.cpp
     utils/notify.mm
+    mac/wizIAPHelper.mm
+#    mac/rmstore/RMStore.m
+    mac/rmstore/RMAppReceipt.mm
+    mac/rmstore/RMStoreAppReceiptVerificator.mm
 )
 
 set(wiznote_HEADERS_MAC
@@ -21,6 +25,10 @@ set(wiznote_HEADERS_MAC
     mac/wizmactoolbardelegate.h
     mac/wizmacactionhelper.h
     mac/wizUserInfoWidgetBaseMac_mm.h
+    mac/wizIAPHelper.h
+#    mac/rmstore/RMStore.h
+    mac/rmstore/RMAppReceipt.h
+    mac/rmstore/RMStoreAppReceiptVerificator.h
 )
 
 set(wiznote_SOURCES
@@ -68,7 +76,7 @@ set(wiznote_SOURCES
     share/wizObjectDataDownloader.cpp
     #share/wizUserAvatar.cpp
     sync/avatar.cpp
-    sync/wizkmxmlrpc.cpp
+    sync/wizKMServer.cpp
     sync/wizkmsync.cpp
     sync/asyncapi.cpp
     #sync/wizCloudPool.cpp
@@ -88,6 +96,7 @@ set(wiznote_SOURCES
     wizDocumentListViewItem.cpp
     wizDocumentView.cpp
     wizDocumentWebView.cpp
+    wizDocumentWebEngine.cpp
     wizactions.cpp
     wiznotestyle.cpp
     wizLineInputDialog.cpp
@@ -151,6 +160,37 @@ set(wiznote_SOURCES
     share/wizRtfReader.cpp
     widgets/wizScreenShotWidget.cpp
     widgets/wizVerificationCodeDialog.cpp
+    share/rtf2html/fmt_opts.cpp
+    share/rtf2html/rtf_keyword.cpp
+    share/rtf2html/rtf_table.cpp
+    share/rtf2html/rtf2html.cpp
+    widgets/wizEmailShareDialog.cpp
+    share/websocketclientwrapper.cpp
+    share/websockettransport.cpp
+    wizWebEngineInjectObject.cpp
+    widgets/wizMarkdownTemplateDialog.cpp
+    widgets/wizShareLinkDialog.cpp
+    share/wizAnalyzer.cpp
+    share/wizTranslater.cpp
+    widgets/wizIAPDialog.cpp
+    widgets/wizAdvancedSearchDialog.cpp
+    share/wizUDPClient.cpp
+    share/wizMessageBox.cpp
+    wizOEMSettings.cpp
+    widgets/wizTagBar.cpp
+    widgets/wizTrayIcon.cpp
+    share/wizEventLoop.cpp
+    sync/wizJSONServerBase.cpp
+    share/wizObjectOperator.cpp
+    widgets/wizLocalProgressWebView.cpp
+    widgets/wizCrashReportDialog.cpp
+    widgets/wizCustomToolBar.cpp
+    widgets/wizTipsWidget.cpp
+    widgets/wizSingleDocumentView.cpp
+    mac/wizSearchWidget_mm.cpp
+    core/wizAccountManager.cpp
+    core/wizCommentManager.cpp
+    core/wizNoteManager.cpp
 )
 
 set(wiznote_HEADERS
@@ -190,7 +230,7 @@ set(wiznote_HEADERS
     share/wizziwreader.h
     html/wizhtmlreader.h
     html/wizhtmlcollector.h
-    sync/wizkmxmlrpc.h
+    sync/wizKMServer.h
     sync/wizkmsync.h
     sync/asyncapi.h
     #sync/wizCloudPool.h
@@ -225,6 +265,7 @@ set(wiznote_HEADERS
     wizDocumentListViewItem.h
     wizDocumentView.h
     wizDocumentWebView.h
+    wizDocumentWebEngine.h
     wizdocumenthistory.h
     wizattachmentlistwidget.h
     wiztaglistwidget.h
@@ -289,6 +330,40 @@ set(wiznote_HEADERS
     share/wizRtfReader.h
     widgets/wizScreenShotWidget.h
     widgets/wizVerificationCodeDialog.h
+    share/rtf2html/common.h
+    share/rtf2html/config.h
+    share/rtf2html/dbg_iter.h
+    share/rtf2html/fmt_opts.h
+    share/rtf2html/rtf_keyword.h
+    share/rtf2html/rtf_table.h
+    share/rtf2html/rtf_tools.h
+    widgets/wizEmailShareDialog.h
+    share/websocketclientwrapper.h
+    share/websockettransport.h
+    wizWebEngineInjectObject.h
+    widgets/wizMarkdownTemplateDialog.h
+    widgets/wizShareLinkDialog.h
+    share/wizAnalyzer.h
+    share/wizTranslater.h
+    widgets/wizIAPDialog.h
+    widgets/wizAdvancedSearchDialog.h
+    share/wizUDPClient.h
+    share/wizMessageBox.h
+    wizOEMSettings.h
+    widgets/wizTagBar.h
+    widgets/wizTrayIcon.h
+    share/wizEventLoop.h
+    sync/wizJSONServerBase.h
+    share/wizObjectOperator.h
+    widgets/wizLocalProgressWebView.h
+    widgets/wizCrashReportDialog.h
+    widgets/wizCustomToolBar.h
+    widgets/wizTipsWidget.cpp
+    widgets/wizSingleDocumentView.h
+    wizPositionDelegate.h
+    core/wizAccountManager.h
+    core/wizCommentManager.h
+    core/wizNoteManager.h
 )
 
 set(wiznote_FORMS
@@ -307,6 +382,11 @@ set(wiznote_FORMS
     ui/wizSearchReplaceWidget.ui
     ui/wizDocTemplateDialog.ui
     ui/wizVerificationCodeDialog.ui
+    ui/wizEmailShareDialog.ui
+    ui/wizMarkdownTemplateDialog.ui
+    ui/wizIAPDialog.ui
+    ui/wizAdvancedSearchDialog.ui
+    ui/wizCrashReportDialog.ui
 )
 
 set(wiznote_TRANSLATIONS
@@ -337,7 +417,7 @@ if(UNIX)
         # refer to: https://bugreports.qt-project.org/browse/QTBUG-18662
         file(GLOB _qt5_QM ${qt_translations_dir}/qt_*.qm)
 
-        add_executable(WizNote MACOSX_BUNDLE ${wiznote_SOURCES} ${wiznote_HEADERS} ${wiznote_SOURCES_MAC} ${wiznote_HEADERS_MAC} ${wiznote_FORM_HEADERS} ${wiznote_QM} ${_qt5_QM} ${wiznote_RC} ${wiznote_LOGO})
+        add_executable(WizNote MACOSX_BUNDLE  ${wiznote_HEADERS} ${wiznote_HEADERS_MAC} ${wiznote_FORM_HEADERS} ${wiznote_SOURCES_MAC} ${wiznote_SOURCES} ${wiznote_QM} ${_qt5_QM} ${wiznote_RC} ${wiznote_LOGO})
         set_target_properties(WizNote PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
         set_target_properties(${PROJECT_NAME} PROPERTIES AUTOMOC_MOC_OPTIONS "-DQ_OS_MAC")
 
@@ -351,10 +431,17 @@ if(UNIX)
         cmake_policy(SET CMP0016 OLD)
         find_library(_CARBON_LIBRARY Carbon)
         find_library(_COCOA_LIBRARY Cocoa)
+        find_library(_WEBKIT_LIBRARY WebKit)
+        find_library(_STORE_LIBRARY StoreKit)
+        find_library(_IO_LIBRARY IOKit)
+        if (PLCrashReporter)
+            find_library(_CRASHREPORTER CrashReporter)
+        endif(PLCrashReporter)
 
         # please set env: MACOSX_DEPLOYMENT_TARGET = 10.8 to ~/.bash_profile if you need NSUserNotification support.
         message("use cocoa library: ${_COCOA_LIBRARY}")
-        target_link_libraries(${PROJECT_NAME} ${_CARBON_LIBRARY} ${_COCOA_LIBRARY})
+        target_link_libraries(${PROJECT_NAME} ${_CARBON_LIBRARY} ${_COCOA_LIBRARY}
+                ${_WEBKIT_LIBRARY} ${_STORE_LIBRARY} ${_IO_LIBRARY} ${_CRASHREPORTER})
 
         # setup plist info and logo
         set_target_properties(${PROJECT_NAME} PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/build/osx/Info.plist")
@@ -416,6 +503,7 @@ include_directories(
     ${CMAKE_SOURCE_DIR}/lib
     ${CMAKE_SOURCE_DIR}/lib/clucene/src/core
     ${CMAKE_SOURCE_DIR}/lib/clucene/src/shared
+    ${CMAKE_SOURCE_DIR}/lib/openssl/include
     ${CMAKE_BINARY_DIR}/lib/clucene/src/shared
 )
 
@@ -423,6 +511,24 @@ link_directories(
     ${CMAKE_BINARY_DIR}/bin
 )
 
+
+
+if(APPSTORE_BUILD)
+target_link_libraries(${PROJECT_NAME}
+    quazip
+    cryptlib
+    clucene-core-static
+    clucene-shared-static
+    extensionsystem
+    aggregation
+    coreplugin
+    helloworld
+    markdown
+    ${CMAKE_SOURCE_DIR}/lib/openssl/lib/libcrypto.a
+    ${CMAKE_SOURCE_DIR}/lib/openssl/lib/libssl.a
+    ${CMAKE_DL_LIBS}
+)
+else(APPSTORE_BUILD)
 target_link_libraries(${PROJECT_NAME}
     quazip
     cryptlib
@@ -435,3 +541,4 @@ target_link_libraries(${PROJECT_NAME}
     markdown
     ${CMAKE_DL_LIBS}
 )
+endif(APPSTORE_BUILD)

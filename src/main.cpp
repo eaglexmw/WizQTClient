@@ -1,5 +1,6 @@
 #include <QtGlobal>
 #include <QApplication>
+#include <QTreeWidget>
 #include <QMessageBox>
 #include <QIcon>
 #include <QDir>
@@ -8,27 +9,33 @@
 #include <QProcess>
 #include <QSettings>
 #include <QDesktopServices>
+#include <QSslConfiguration>
+#include <QNetworkProxy>
 
 #include <sys/stat.h>
 
 #include <extensionsystem/pluginmanager.h>
-#include "wizmainwindow.h"
-#include "wizLoginDialog.h"
+#include "utils/pathresolve.h"
+#include "utils/logger.h"
+#include "utils/stylehelper.h"
 #include "share/wizsettings.h"
 #include "share/wizwin32helper.h"
 #include "share/wizDatabaseManager.h"
 #include "share/wizSingleApplication.h"
+#include "core/wizNoteManager.h"
 
 #ifdef Q_OS_MAC
 #include "mac/wizmachelper.h"
+#include "mac/wizIAPHelper.h"
 #endif
 
-#include "utils/pathresolve.h"
-#include "utils/logger.h"
 #include "sync/token.h"
 #include "sync/apientry.h"
 #include "sync/avatar.h"
 #include "thumbcache.h"
+#include "wizmainwindow.h"
+#include "wizDocumentWebEngine.h"
+#include "wizLoginDialog.h"
 
 using namespace ExtensionSystem;
 using namespace Core::Internal;
@@ -49,7 +56,11 @@ static inline QStringList getPluginPaths()
 #else
     // 2) "PlugIns" (OS X)
     QString pluginPath = rootDirPath;
+    #ifdef XCODEBUILD
+    pluginPath += QLatin1String("/PlugIns/Debug");
+    #else
     pluginPath += QLatin1String("/PlugIns");
+    #endif
     rc.push_back(pluginPath);
 #endif
     // 3) <localappdata>/plugins/<ideversion>
@@ -176,6 +187,11 @@ int mainCore(int argc, char *argv[])
     }
 #else
     QApplication a(argc, argv);
+
+#ifdef BUILD4APPSTORE
+    CWizIAPHelper helper;
+    helper.validteReceiptOnLauch();
+#endif
 #endif
 
 
@@ -190,23 +206,42 @@ int mainCore(int argc, char *argv[])
     QApplication::setApplicationName(QObject::tr("WizNote"));
     QApplication::setOrganizationName(QObject::tr("cn.wiz.wiznoteformac"));
 
-
     QIcon icon;
     icon.addPixmap(QPixmap(":/logo_16.png"));
     icon.addPixmap(QPixmap(":/logo_32.png"));
     icon.addPixmap(QPixmap(":/logo_48.png"));
-    icon.addPixmap(QPixmap(":/logo_96.png"));
+    icon.addPixmap(QPixmap(":/logo_64.png"));
     icon.addPixmap(QPixmap(":/logo_128.png"));
     icon.addPixmap(QPixmap(":/logo_256.png"));
     QApplication::setWindowIcon(icon);
 
-
-
 #ifdef Q_OS_MAC
     wizMacInitUncaughtExceptionHandler();
     wizMacRegisterSystemService();
+
+    // init sys local for crash report
+    QString sysLocal = QLocale::system().name();
+    QTranslator translatorSys;
+    QString sysLocalFile = Utils::PathResolve::localeFileName(sysLocal);
+    translatorSys.load(sysLocalFile);
+    a.installTranslator(&translatorSys);
+
+    initCrashReporter();
+
+    a.removeTranslator(&translatorSys);
+
+    //FIXME: 在Mac osx安全更新之后存在ssl握手问题，此处进行特殊处理
+    QSslConfiguration conf = QSslConfiguration::defaultConfiguration();
+    conf.setPeerVerifyMode(QSslSocket::VerifyNone);
+    QSslConfiguration::setDefaultConfiguration(conf);
 #endif
 
+    a.setStyleSheet("QToolTip { \
+                    font: 12px; \
+                    color:#000000; \
+                    padding:0px 1px; \
+                    background-color: #F8F8F8; \
+                    border:0px;}");
 
     // setup settings
     QSettings::setDefaultFormat(QSettings::IniFormat);
@@ -231,10 +266,13 @@ int mainCore(int argc, char *argv[])
     int nCacheSize = globalSettings->value("Common/Cache", 10240*3).toInt();
     QPixmapCache::setCacheLimit(nCacheSize);
 
-    QString strUserId = globalSettings->value("Users/DefaultUser").toString();
-    QString strPassword;
+    QString strUserGuid = globalSettings->value("Users/DefaultUserGuid").toString();
+    QList<WizLocalUser> localUsers;
+    WizGetLocalUsers(localUsers);    
+    QString strAccountFolderName = WizGetLocalFolderName(localUsers, strUserGuid);
 
-    CWizUserSettings userSettings(strUserId);
+    QString strPassword;
+    CWizUserSettings userSettings(strAccountFolderName);
 
     // setup locale for welcome dialog
     QString strLocale = userSettings.locale();
@@ -258,7 +296,6 @@ int mainCore(int argc, char *argv[])
     }
 #endif
 
-
     // figure out auto login or manually login
     bool bFallback = true;
 
@@ -271,11 +308,11 @@ int mainCore(int argc, char *argv[])
 
     if (bAutoLogin && !strPassword.isEmpty()) {
         bFallback = false;
-    }
+    }    
 
-    QSettings* settings = new QSettings(Utils::PathResolve::userSettingsFile(strUserId), QSettings::IniFormat);
+    //
+    QSettings* settings = new QSettings(Utils::PathResolve::userSettingsFile(strAccountFolderName), QSettings::IniFormat);
     PluginManager::setSettings(settings);
-
     //set network proxy
     CWizSettings wizSettings(Utils::PathResolve::globalSettingsFile());
     if (wizSettings.GetProxyStatus())
@@ -289,21 +326,50 @@ int mainCore(int argc, char *argv[])
         QNetworkProxy::setApplicationProxy(proxy);
     }
 
-
+    //
+    QString strUserId = WizGetLocalUserId(localUsers, strUserGuid);
+    bool isNewRegisterAccount = false;
     // manually login
-    if (bFallback) {
-        CWizLoginDialog loginDialog(strUserId, strLocale);
+    if (bFallback)
+    {
+        CWizLoginDialog loginDialog(strLocale, localUsers);
         if (QDialog::Accepted != loginDialog.exec())
             return 0;
 
-        strUserId = loginDialog.userId();
+//        qDebug() << "deafult user id : " << strUserGuid << " login dailog user id : " << loginDialog.loginUserGuid();
+        if (strUserId.isEmpty() || loginDialog.loginUserGuid() != strUserGuid)
+        {
+            strAccountFolderName = WizGetLocalFolderName(localUsers, loginDialog.loginUserGuid());
+            if (strAccountFolderName.isEmpty())
+            {
+                strAccountFolderName = loginDialog.userId();
+            }
+            qDebug() << "login user id : " << loginDialog.userId();
+            settings = new QSettings(Utils::PathResolve::userSettingsFile(strAccountFolderName), QSettings::IniFormat);
+            PluginManager::setSettings(settings);
+        }
         strPassword = loginDialog.password();
+        strUserId = loginDialog.userId();
+        isNewRegisterAccount = loginDialog.isNewRegisterAccount();
+    }
+    else
+    {
+        if (userSettings.serverType() == EnterpriseServer)
+        {
+            WizService::CommonApiEntry::setEnterpriseServerIP(userSettings.enterpriseServerIP());
+        }
+        else if (userSettings.serverType() == WizServer ||
+                 (userSettings.serverType() == NoServer && !userSettings.myWizMail().isEmpty()))
+        {
+            WizService::CommonApiEntry::setEnterpriseServerIP(WIZNOTE_API_SERVER);
+        }
     }
 
     //
     //
     // reset locale for current user.
-    userSettings.setUser(strUserId);
+    userSettings.setAccountFolderName(strAccountFolderName);
+    userSettings.setUserId(strUserId);
     strLocale = userSettings.locale();
 
     a.removeTranslator(&translatorWizNote);
@@ -316,16 +382,21 @@ int mainCore(int argc, char *argv[])
     translatorQt.load(strLocaleFile);
     a.installTranslator(&translatorQt);
 
-    CWizDatabaseManager dbMgr(strUserId);
+    WizService::CommonApiEntry::setLanguage(strLocale);
+
+    CWizDatabaseManager dbMgr(strAccountFolderName);
     if (!dbMgr.openAll()) {
         QMessageBox::critical(NULL, "", QObject::tr("Can not open database"));
         return 0;
     }
 
+
+    qDebug() << "set user id for token ; " << strUserId;
     WizService::Token::setUserId(strUserId);
     WizService::Token::setPasswd(strPassword);
 
     dbMgr.db().SetPassword(::WizEncryptPassword(strPassword));
+    dbMgr.db().UpdateInvalidData();
 
     // FIXME: move to plugins
     WizService::AvatarHost avatarHost;
@@ -345,7 +416,16 @@ int mainCore(int argc, char *argv[])
     PluginManager::loadPlugins();
 
     w.show();
-    w.init();
+    w.init();   
+
+    //
+    CWizNoteManager::createSingleton(w);
+
+    if (isNewRegisterAccount)
+    {
+        CWizNoteManager* noteManager = CWizNoteManager::instance();
+        noteManager->createIntroductionNoteForNewRegisterAccount();
+    }
 
     int ret = a.exec();
     if (w.isLogout()) {
@@ -376,3 +456,87 @@ int main(int argc, char *argv[])
 
     return ret;
 }
+
+
+//#include <QPainter>
+//#include <QPaintEvent>
+//class TransWindow : public QMainWindow
+//{
+//public:
+//    TransWindow(QWidget* parent = 0) : QMainWindow(parent)
+//    {
+//    }
+
+//protected:
+//    void paintEvent(QPaintEvent*)
+//    {
+//        QPainter p(this);
+//        p.setCompositionMode( QPainter::CompositionMode_Clear );
+//        p.fillRect(rect(), Qt::SolidPattern );
+
+//    //    p.setCompositionMode(QPainter::CompositionMode_SourceOver);
+////        p.fillRect( 10, 10, 300, 300, QColor(255, 255, 255, m_alpha));
+//    }
+//};
+
+//class TransWidget : public QWidget
+//{
+//public:
+//    TransWidget(QWidget* parent = 0) : QWidget(parent)
+//    {
+//    }
+
+//protected:
+//    void paintEvent(QPaintEvent*)
+//    {
+//        QPainter p(this);
+//        p.setCompositionMode( QPainter::CompositionMode_Clear );
+//        p.fillRect(rect(), Qt::SolidPattern );
+
+//    //    p.setCompositionMode(QPainter::CompositionMode_SourceOver);
+////        p.fillRect( 10, 10, 300, 300, QColor(255, 255, 255, m_alpha));
+//    }
+//};
+
+
+//// test
+//#include <QLabel>
+//#include <QVBoxLayout>
+//#include <QToolBar>
+//int main(int argc, char *argv[])
+//{
+//    QApplication a(argc, argv);
+
+//    TransWindow window;
+//    window.setGeometry(500, 500, 500, 300);
+
+//    window.setAutoFillBackground(false);
+//    window.setAttribute(Qt::WA_TranslucentBackground, true);
+////    window.setUnifiedTitleAndToolBarOnMac(true);
+
+
+//    QLabel* label = new QLabel(&window);
+//    label->setText("Hello World");
+//    QToolBar* toolBar = new QToolBar(&window);
+//    window.addToolBar(toolBar);
+//    QWidget* wgt = new QWidget(&window);
+//    QVBoxLayout* layout = new QVBoxLayout(wgt);
+//    wgt->setLayout(layout);
+//    layout->setContentsMargins(0, 0, 0, 0);
+//    layout->addWidget(label);
+//    TransWidget* transWgt = new TransWidget(&window);
+//    transWgt->setMinimumHeight(50);
+//    layout->addWidget(transWgt);
+//    QTreeWidget* tree = new QTreeWidget(wgt);
+//    tree->setStyleSheet("background-color:transparent;");
+//    tree->setAutoFillBackground(true);
+//    layout->addWidget(tree);
+//    window.setCentralWidget(wgt);
+
+//    window.show();
+
+//    enableBehindBlurOnOSX10_10(wgt);
+
+//    return a.exec();
+//}
+

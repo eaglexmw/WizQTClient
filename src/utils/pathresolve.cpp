@@ -4,7 +4,6 @@
 #include <QApplication>
 #include <QDir>
 #include <QDebug>
-#include "mac/wizmachelper.h"
 
 namespace Utils {
 
@@ -54,7 +53,18 @@ QString PathResolve::builtinTemplatePath()
 
 QString PathResolve::downloadedTemplatesPath()
 {
-    return cachePath() + "templates/";
+    QString strPath;
+#ifdef Q_OS_MAC
+    #ifdef BUILD4APPSTORE
+        strPath = QDir::homePath() + "/Library/Templates/";
+    #else
+        strPath = dataStorePath() + "templates/";
+    #endif
+#else
+    strPath = dataStorePath() + "templates/";
+#endif
+
+    return strPath;
 }
 
 QString PathResolve::dataStorePath()
@@ -161,9 +171,9 @@ QString PathResolve::globalSettingsFile()
     return strConfigHome + "wiznote.ini";
 }
 
-QString PathResolve::userSettingsFile(const QString strUserId)
+QString PathResolve::userSettingsFile(const QString strAccountFolderName)
 {
-    return dataStorePath() + strUserId + "/wiznote.ini";
+    return dataStorePath() + strAccountFolderName + "/wiznote.ini";
 }
 
 QString PathResolve::qtLocaleFileName(const QString &strLocale)
@@ -174,6 +184,11 @@ QString PathResolve::qtLocaleFileName(const QString &strLocale)
 QString PathResolve::localeFileName(const QString &strLocale)
 {
     return resourcesPath() + "locales/wiznote_" + strLocale + ".qm";
+}
+
+QString PathResolve::introductionNotePath()
+{
+    return resourcesPath() + "files/introduction/";
 }
 
 void PathResolve::addBackslash(QString& strPath)

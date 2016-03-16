@@ -4,6 +4,12 @@
 # you can download old sdk from here: https://github.com/JuliaEichler/Mac_OSX_SDKs
 # default is 10.7 for binary release.
 
+# CMake arguments for WizNote
+# WIZNOTE_USE_QT5   use qt5 to compile project
+# APPSTORE_BUILD  build for Apple Appsotre, would not use qt deploy
+# XCODEBUILD      adjust project params to suit for xcode
+# PLCrashReporter   use PLCrashReporter for mac, need PLCrashReporter framework
+
 if (APPLE)
     cmake_minimum_required(VERSION 2.8.12)
 else(APPLE)
@@ -28,6 +34,21 @@ if(NOT CMAKE_BUILD_TYPE)
       FORCE)
 endif()
 
+include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
+CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
+if(COMPILER_SUPPORTS_CXX11)
+    if(APPLE)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++")
+    else(APPLE)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+    endif(APPLE)
+elseif(COMPILER_SUPPORTS_CXX0X)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+else()
+        message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
+endif()
+
 if(NOT WIZNOTE_USE_QT5)
     set(WIZNOTE_USE_QT5 OFF CACHE BOOL
         "Build WizNote use Qt5, default is off.")
@@ -39,6 +60,11 @@ if(APPLE)
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -gdwarf-2")
         add_definitions(-DBUILD4APPSTORE=TRUE)
     endif(APPSTORE_BUILD)
+    if (PLCrashReporter)
+        add_definitions(-DUsePLCrashReporter=TRUE)
+    endif(PLCrashReporter)
+    add_definitions(-DUSECOCOATOOLBAR=TRUE)
+#    add_definitions(-DUSEWEBENGINE=FALSE)
 endif(APPLE)
 
 if(APPLE)

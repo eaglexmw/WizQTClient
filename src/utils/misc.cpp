@@ -1,12 +1,21 @@
 #include "misc.h"
 
 #include <QDateTime>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QTextStream>
+
+#include "wizdef.h"
 
 namespace Utils {
 
 QString Misc::time2humanReadable(const QDateTime& time) {
+    return time2humanReadable(time, "yy-MM-dd");
+}
+
+QString Misc::time2humanReadable(const QDateTime& time, const QString& formate)
+{
     QDateTime t(QDateTime::currentDateTime());
     int nElapseSecs = time.secsTo(t);
     int nElapseDays = time.daysTo(t);
@@ -16,7 +25,7 @@ QString Misc::time2humanReadable(const QDateTime& time) {
     } else if (nElapseDays == 2) {
         return QObject::tr("The day before yesterday");
     } else if (nElapseDays > 2) {
-        return time.toString("yy-M-d");
+        return time.toString(formate);
     }
 
     if (nElapseSecs < 60) {
@@ -56,6 +65,201 @@ bool Misc::loadUnicodeTextFromFile(const QString& strFileName, QString& strText)
     file.close();
 
     return true;
+}
+
+void Misc::addBackslash(QString& strPath)
+{
+    strPath.replace('\\', '/');
+
+    if (strPath.endsWith('/'))
+        return;
+
+    strPath += '/';
+}
+
+void Misc::removeBackslash(CString& strPath)
+{
+    while (1)
+    {
+        if (!strPath.endsWith('/'))
+            return;
+
+        strPath.remove(strPath.length() - 1, 1);
+    }
+}
+
+CString Misc::addBackslash2(const CString& strPath)
+{
+    CString str(strPath);
+    addBackslash(str);
+    return str;
+}
+CString Misc::removeBackslash2(const CString& strPath)
+{
+    CString str(strPath);
+    removeBackslash(str);
+    return str;
+}
+
+void Misc::ensurePathExists(const CString& path)
+{
+    QDir dir;
+    dir.mkpath(path);
+}
+
+void Misc::ensureFileExists(const QString& strFileName)
+{
+    QFile file(strFileName);
+    if (!file.exists()) {
+        file.open(QIODevice::ReadWrite);
+        file.close();
+    }
+}
+
+CString Misc::extractFilePath(const CString& strFileName)
+{
+    CString str = strFileName;
+    str.Replace('\\', '/');
+    int index = str.lastIndexOf('/');
+    if (-1 == index)
+        return strFileName;
+    //
+    return str.left(index + 1); //include separator
+}
+
+
+CString Misc::extractLastPathName(const CString& strFileName)
+{
+    CString strPath = removeBackslash2(strFileName);
+    return extractFileName(strPath);
+}
+
+QString Misc::extractFileName(const QString& strFileName)
+{
+    QString str = strFileName;
+    str.replace('\\', '/');
+    int index = str.lastIndexOf('/');
+    if (-1 == index)
+        return strFileName;
+
+    return strFileName.right(str.length() - index - 1);
+}
+
+QString Misc::extractFileTitle(const QString &strFileName)
+{
+    QString strName = extractFileName(strFileName);
+
+    int index = strName.lastIndexOf('.');
+    if (-1 == index)
+        return strName;
+
+    return strName.left(index);
+}
+
+CString Misc::extractTitleTemplate(const CString& strFileName)
+{
+    return strFileName;
+}
+
+CString Misc::extractFileExt(const CString& strFileName)
+{
+    CString strName = extractFileName(strFileName);
+    //
+    int index = strName.lastIndexOf('.');
+    if (-1 == index)
+        return "";
+    //
+    return strName.right(strName.GetLength() - index);  //include .
+}
+
+qint64 Misc::getFileSize(const CString& strFileName)
+{
+    QFileInfo info(strFileName);
+    return info.size();
+}
+
+void Misc::deleteFile(const CString& strFileName)
+{
+    QDir dir(extractFilePath(strFileName));
+    dir.remove(extractFileName(strFileName));
+}
+
+QString Misc::getHtmlBodyContent(QString strHtml)
+{
+    QRegExp regex("<body.*>([\\s\\S]*)</body>", Qt::CaseInsensitive);
+    QString strBody;
+    if (regex.indexIn(strHtml) != -1) {
+        strBody = regex.cap(1);
+    } else {
+        strBody = strHtml;
+    }
+    return strBody;
+}
+
+void Misc::splitHtmlToHeadAndBody(const QString& strHtml, QString& strHead, QString& strBody)
+{
+    QRegExp regh("<head.*>([\\s\\S]*)</head>", Qt::CaseInsensitive);
+    if (regh.indexIn(strHtml) != -1) {
+        strHead = regh.cap(1).simplified();
+    }
+
+    QRegExp regex("<body.*>([\\s\\S]*)</body>", Qt::CaseInsensitive);
+    if (regex.indexIn(strHtml) != -1) {
+        strBody = regex.cap(1);
+    } else {
+        strBody = strHtml;
+    }
+}
+
+bool Misc::isChinese()
+{
+    return isSimpChinese() || isTraditionChinese();
+}
+
+bool Misc::isSimpChinese()
+{
+    QLocale local;
+    QString name = local.name().toLower();
+    if (name == "zh_cn"
+        || name == "zh-cn")
+    {
+        return true;
+    }
+    return false;
+}
+
+bool Misc::isTraditionChinese()
+{
+    QLocale local;
+    QString name = local.name().toLower();
+    if (name == "zh_tw"
+        || name == "zh-tw")
+    {
+        return true;
+    }
+    return false;
+}
+
+int Misc::getVersionCode()
+{
+    QString str(WIZ_CLIENT_VERSION);
+    QStringList strList = str.split('.');
+    Q_ASSERT(strList.count() >= 3);
+
+    QString strNum = strList.first();
+    QString strSec = strList.at(1);
+    while (strSec.length() < 2) {
+        strSec.insert(0, "0");
+    }
+    QString strThr = strList.at(2);
+    while (strThr.length() < 3) {
+        strThr.insert(0, "0");
+    }
+
+    strNum.append(strSec);
+    strNum.append(strThr);
+
+    return strNum.toInt();
 }
 
 

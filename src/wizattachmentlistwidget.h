@@ -25,7 +25,7 @@ public:
         Uploading
     };
 
-    CWizAttachmentListViewItem(const WIZDOCUMENTATTACHMENTDATA& att);
+    CWizAttachmentListViewItem(const WIZDOCUMENTATTACHMENTDATA& att, QListWidget* view);
     const WIZDOCUMENTATTACHMENTDATA& attachment() const { return m_attachment; }
 
     QString detailText(const CWizAttachmentListView* view) const;
@@ -61,9 +61,11 @@ public:
 
 public Q_SLOTS:
     void on_action_addAttachment();
+//    void on_action_downloadAttachment();
     void on_action_saveAttachmentAs();
     void on_action_openAttachment();
     void on_action_deleteAttachment();
+    void on_action_attachmentHistory();
     void on_list_itemDoubleClicked(QListWidgetItem* item);
     //
     void forceRepaint();
@@ -77,6 +79,7 @@ public:
     const CWizAttachmentListViewItem* attachmentItemFromIndex(const QModelIndex& index) const;
     void addAttachments();
     void openAttachment(CWizAttachmentListViewItem* item);
+    void downloadAttachment(CWizAttachmentListViewItem* item);
 
 signals:
     void closeRequest();
@@ -104,6 +107,13 @@ private:
     void startDownload(CWizAttachmentListViewItem* item);
     CWizAttachmentListViewItem* newAttachmentItem(const WIZDOCUMENTATTACHMENTDATA& att);
     void waitForDownload();
+
+    //
+    bool isAttachmentModified(const WIZDOCUMENTATTACHMENTDATAEX& attachment);
+    void updateAttachmentInfo(const WIZDOCUMENTATTACHMENTDATAEX& attachment);
+
+    // if has item that is downloading waiting for open , would not open another attach that is not exists in local.
+    static bool m_bHasItemWaitingForDownload;
 };
 
 
@@ -114,6 +124,13 @@ class CWizAttachmentListWidget : public CWizPopupWidget
 public:
     CWizAttachmentListWidget(QWidget* parent);
     bool setDocument(const WIZDOCUMENTDATA& document);
+
+    virtual QSize sizeHint() const;
+signals:
+    void widgetStatusChanged();
+
+protected:
+    void hideEvent(QHideEvent* ev);
 
 private:
     CWizAttachmentListView* m_list;

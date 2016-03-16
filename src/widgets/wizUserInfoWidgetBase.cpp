@@ -8,6 +8,10 @@
 #include <QStyleOption>
 #include <QPainter>
 #include <QMouseEvent>
+#include "utils/stylehelper.h"
+#ifdef Q_OS_MAC
+#include "mac/wizmachelper.h"
+#endif
 
 CWizUserInfoWidgetBase::CWizUserInfoWidgetBase(QWidget *parent)
     : QToolButton(parent)
@@ -34,29 +38,22 @@ void CWizUserInfoWidgetBase::paintEvent(QPaintEvent *event)
     QRect rectIcon = opt.rect;
     rectIcon.setLeft(rectIcon.left());
     rectIcon.setRight(rectIcon.left() + nAvatarWidth);
+    rectIcon.setTop(rectIcon.top() + (rectIcon.height() - nAvatarWidth) / 2);
+    rectIcon.setHeight(nAvatarWidth);
 
+#ifdef Q_OS_MAC
+    float factor = qt_mac_get_scalefactor(0);
+    nAvatarWidth *= factor;
+#endif
+    //
     QPixmap pixmap = getAvatar(nAvatarWidth, nAvatarWidth);
-    if (!pixmap.isNull())
-    {
-        p.drawPixmap(rectIcon, pixmap);
-    }
-    //if (!opt.icon.isNull()) {
-    //    opt.icon.paint(&p, rectIcon);
-    //}
-
-    // draw vip indicator
-    QRect rectVip = rectIcon;
-    rectVip.setLeft(rectVip.right() + nMargin);
-    rectVip.setRight(rectVip.left() + fontMetrics().width(opt.text));
-    //rectVip.setBottom(rectVip.top() + rectVip.height()/2);
-    //if (!m_iconVipIndicator.isNull()) {
-    //    m_iconVipIndicator.paint(&p, rectVip, Qt::AlignLeft|Qt::AlignTop);
-    //}
+    Utils::StyleHelper::drawPixmapWithScreenScaleFactor(&p, rectIcon, pixmap);    
 
     // draw display name
-    QRect rectText = rectVip;
-    //rectText.setBottom(rectText.bottom() + rectVip.height());
-    //rectText.setTop(rectText.bottom() - rectVip.height());
+    QRect rectText = rectIcon;
+    rectText.setLeft(rectText.right() + nMargin);
+    rectText.setRight(rectText.left() + fontMetrics().width(opt.text));
+//    rectText.setBottom(rectText.top() + rectText.height()/2);
     if (!opt.text.isEmpty()) {
         if (opt.state & QStyle::State_MouseOver) {
             QFont font = p.font();
@@ -68,8 +65,24 @@ void CWizUserInfoWidgetBase::paintEvent(QPaintEvent *event)
         p.drawText(rectText, Qt::AlignLeft|Qt::AlignVCenter, opt.text);
     }
 
+    // draw vip indicator
+    QRect rectVip = rectText;
+    QIcon iconVip = getVipIcon();
+    QSize iconSize(16, 16);
+    if (iconVip.availableSizes().size() != 0)
+    {
+        iconSize = iconVip.availableSizes().first();
+    }
+    rectVip.setLeft(rectVip.right() + nMargin);
+    rectVip.setRight(rectVip.left() + iconSize.width());
+//    rectVip.setBottom(rectVip.top() + rectVip.height()/2);
+//    rectVip.setTop(rectVip.top() + (rectVip.height() - iconSize.height()) / 2);
+    if (!iconVip.isNull()) {
+        iconVip.paint(&p, rectVip, Qt::AlignLeft|Qt::AlignVCenter);
+    }
+
     // draw arraw
-    QRect rectArrow = rectText;
+    QRect rectArrow = rectVip;
     rectArrow.setLeft(rectArrow.right() + nMargin);
     rectArrow.setRight(rectArrow.left() + nArrawWidth);
     QIcon arrow = getArrow();

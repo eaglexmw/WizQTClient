@@ -1,7 +1,7 @@
 #ifndef WIZSERVICE_SYNC_P_H
 #define WIZSERVICE_SYNC_P_H
 
-#include "wizkmxmlrpc.h"
+#include "wizKMServer.h"
 
 struct WIZDOCUMENTDATAEX_XMLRPC_SIMPLE;
 
@@ -78,7 +78,7 @@ private:
         __int64 nVersion = m_pDatabase->GetObjectVersion(strObjectType);
         if (nServerVersion == nVersion)
         {
-            m_pEvents->OnStatus(_TR("No change, skip"));
+            m_pEvents->OnStatus(QObject::tr("No change, skip"));
             return TRUE;
         }
         //

@@ -9,7 +9,6 @@ CWizEditorInsertTableForm::CWizEditorInsertTableForm(QWidget *parent) :
 {
     ui->setupUi(this);
 
-    setFixedSize(size());
     setWindowModality(Qt::ApplicationModal);
 
     QIntValidator *validator = new QIntValidator(1, 30, this);
@@ -37,4 +36,14 @@ void CWizEditorInsertTableForm::clear()
     ui->editRows->setFocus();
     ui->editRows->clear();
     ui->editCols->clear();
+}
+
+void CWizEditorInsertTableForm::on_pushButton_cancel_clicked()
+{
+    reject();
+}
+
+void CWizEditorInsertTableForm::on_pushButton_ok_clicked()
+{
+    accept();
 }

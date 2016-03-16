@@ -3,6 +3,7 @@
 #include "wizxmlrpc.h"
 #include "wizmisc.h"
 #include "utils/logger.h"
+#include "rapidjson/document.h"
 
 WIZUSERINFO::WIZUSERINFO()
     : nUserLevel(0)
@@ -37,12 +38,13 @@ WIZUSERINFO::WIZUSERINFO(const WIZUSERINFO& info)
     nUserPoints = info.nUserPoints;
     strUserType = info.strUserType;
     tVipExpried = info.tVipExpried;
+    tCreated = info.tCreated;
 }
 
 
 bool WIZUSERINFO::LoadFromXmlRpc(CWizXmlRpcStructValue& val)
 {
-    CWizXmlRpcStructValue& data = val;
+    CWizXmlRpcStructValue& data = val;    
     data.GetString("token", strToken);
     data.GetTime("expried_time", tTokenExpried);
 
@@ -68,6 +70,7 @@ bool WIZUSERINFO::LoadFromXmlRpc(CWizXmlRpcStructValue& val)
         pUser->GetString("language", strLanguage);
         pUser->GetString("nickname", strNickName);
         pUser->GetString("user_guid", strUserGUID);
+        pUser->GetTime("dt_created", tCreated);
     }
 
     data.GetInt("user_level", nUserLevel);
@@ -240,6 +243,7 @@ QString WIZOBJECTDATA::ObjectTypeToTypeString(WizObjectType eType)
 
 WIZTAGDATA::WIZTAGDATA()
     : nVersion(-1)
+    , nPostion(0)
 {
 }
 
@@ -252,6 +256,7 @@ WIZTAGDATA::WIZTAGDATA(const WIZTAGDATA& data)
     strDescription = data.strDescription;
     tModified = data.tModified;
     nVersion = data.nVersion;
+    nPostion = data.nPostion;
 }
 
 BOOL WIZTAGDATA::EqualForSync(const WIZTAGDATA& data) const
@@ -265,11 +270,11 @@ BOOL WIZTAGDATA::EqualForSync(const WIZTAGDATA& data) const
 BOOL WIZTAGDATA::LoadFromXmlRpc(CWizXmlRpcStructValue& data)
 {
     return data.GetStr(_T("tag_guid"), strGUID)
-        && data.GetStr(_T("tag_group_guid"), strParentGUID)
-        && data.GetStr(_T("tag_name"), strName)
-        && data.GetStr(_T("tag_description"), strDescription)
-        && data.GetTime(_T("dt_info_modified"), tModified)
-        && data.GetInt64(_T("version"), nVersion);
+            && data.GetStr(_T("tag_group_guid"), strParentGUID)
+            && data.GetStr(_T("tag_name"), strName)
+            && data.GetStr(_T("tag_description"), strDescription)
+            && data.GetTime(_T("dt_info_modified"), tModified)
+            && data.GetInt64(_T("version"), nVersion);
 }
 
 BOOL WIZTAGDATA::SaveToXmlRpc(CWizXmlRpcStructValue& data) const
@@ -279,7 +284,7 @@ BOOL WIZTAGDATA::SaveToXmlRpc(CWizXmlRpcStructValue& data) const
     data.AddString(_T("tag_name"), strName);
     data.AddString(_T("tag_description"), strDescription);
     data.AddTime(_T("dt_info_modified"), tModified);
-    data.AddInt64(_T("version"), nVersion);;
+    data.AddInt64(_T("version"), nVersion);
 
     return TRUE;
 }
@@ -758,14 +763,20 @@ bool WIZBIZDATA::LoadFromXmlRpc(CWizXmlRpcStructValue& data)
         structData->ToStringMap(mapAvatarChanges);
     }
 
-    return !bizGUID.isEmpty()
-            && !bizName.isEmpty();
+    if (bizGUID.isEmpty() || bizName.isEmpty())
+    {
+        qWarning() << "Biz data warning, guid : " << bizGUID << " biz name : " << bizName;
+    }
+
+    return true;
 }
 
 /* ---------------------------- WIZMESSAGEDATA ---------------------------- */
 WIZMESSAGEDATA::WIZMESSAGEDATA()
     : nId(0)
+    , nDeleteStatus(0)
     , nVersion(-1)
+    , nLocalChanged(0)
 {
 }
 
@@ -783,12 +794,14 @@ WIZMESSAGEDATA::WIZMESSAGEDATA(const WIZMESSAGEDATA& data)
     , tCreated(data.tCreated)
     , nMessageType(data.nMessageType)
     , nReadStatus(data.nReadStatus)
+    , nDeleteStatus(data.nDeleteStatus)
     , nEmailStatus(data.nEmailStatus)
     , nSMSStatus(data.nSMSStatus)
     , title(data.title)
     , messageBody(data.messageBody)
     , note(data.note)
     , nVersion(data.nVersion)
+    , nLocalChanged(data.nLocalChanged)
 {
 }
 
@@ -806,9 +819,12 @@ WIZMESSAGEDATA::WIZMESSAGEDATA(const WIZUSERMESSAGEDATA& data)
     , tCreated(data.tCreated)
     , nMessageType(data.nMessageType)
     , nReadStatus(data.nReadStatus)
+    , nDeleteStatus(data.nDeletedStatus)
     , title(data.strTitle)
     , messageBody(data.strMessageText)
     , nVersion(data.nVersion)
+    , nLocalChanged(data.nLocalChanged)
+    , note(data.strNote)
 {
 
 }
@@ -823,6 +839,7 @@ bool WIZMESSAGEDATA::LoadFromXmlRpc(CWizXmlRpcStructValue& data)
     data.GetTime("dt_created", tCreated);
     data.GetInt("message_type", nMessageType);
     data.GetInt("read_status", nReadStatus);
+    data.GetInt("delete_status", nDeleteStatus);
     data.GetInt("email_status", nEmailStatus);
     data.GetInt("sms_status", nSMSStatus);
 
@@ -841,6 +858,29 @@ bool WIZMESSAGEDATA::LoadFromXmlRpc(CWizXmlRpcStructValue& data)
     data.GetInt64("version", nVersion);
 
     return true;
+}
+
+bool WIZMESSAGEDATA::isAd()
+{
+    if (nMessageType != WIZ_USER_MSG_TYPE_SYSTEM || note.isEmpty())
+        return false;
+
+    rapidjson::Document d;
+    d.Parse<0>(note.toUtf8().constData());
+
+    if (d.HasParseError())
+    {
+        qWarning() << "parse message note data error : " << d.GetParseError();
+    }
+
+    if (!d.HasMember("type"))
+        return false;
+
+    QTextCodec* codec = QTextCodec::codecForName("UTF-8");
+    QTextDecoder* encoder = codec->makeDecoder();
+    QString type = encoder->toUnicode(d["type"].GetString(), d["type"].GetStringLength());
+
+    return type == "ad";
 }
 
 /* ---------------------------- WIZKVRETURN ---------------------------- */
@@ -866,6 +906,7 @@ BOOL WIZUSERMESSAGEDATA::LoadFromXmlRpc(CWizXmlRpcStructValue &data)
     data.GetStr(_T("receiver_id"), strReceiverID);
     data.GetInt(_T("message_type"), nMessageType);
     data.GetInt(_T("read_status"), nReadStatus);
+    data.GetInt(_T("delete_status"), nDeletedStatus);
     data.GetTime(_T("dt_created"), tCreated);
     data.GetStr(_T("message_body"), strMessageText);
     data.GetInt64(_T("version"), nVersion);
@@ -873,5 +914,6 @@ BOOL WIZUSERMESSAGEDATA::LoadFromXmlRpc(CWizXmlRpcStructValue &data)
     data.GetStr(_T("receiver_alias"), strReceiver);
     data.GetStr(_T("sender_alias"), strSender);
     data.GetStr(_T("title"), strTitle);
+    data.GetStr(_T("note"), strNote);
     return 	TRUE;
 }

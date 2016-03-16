@@ -8,7 +8,6 @@ CWizEditorInsertLinkForm::CWizEditorInsertLinkForm(QWidget *parent) :
     ui(new Ui::CWizEditorInsertLinkForm)
 {
     ui->setupUi(this);
-    setFixedSize(size());
     setWindowModality(Qt::ApplicationModal);
 }
 
@@ -43,3 +42,13 @@ void CWizEditorInsertLinkForm::setUrl(const QString& strText)
 //    ui->editContent->clear();
 //    ui->editUrl->clear();
 //}
+
+void CWizEditorInsertLinkForm::on_pushButton_cancel_clicked()
+{
+    reject();
+}
+
+void CWizEditorInsertLinkForm::on_pushButton_ok_clicked()
+{
+    accept();
+}

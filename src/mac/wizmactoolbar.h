@@ -8,14 +8,42 @@
 #include <QtCore/QString>
 #include <QtCore/QUrl>
 #include <QAction>
-#include <QtDeclarative/QDeclarativeListProperty>
-#include <QtDeclarative/QDeclarativeParserStatus>
+//#include <QtDeclarative/QDeclarativeListProperty>
+//#include <QtDeclarative/QDeclarativeParserStatus>
+#include <QMacCocoaViewContainer>
 
 
 class CWizMacToolBarPrivate;
 class CWizMacToolBarItem;
 class CWizSearchWidget;
-class QMacCocoaViewContainer;
+
+
+class CWizMacToolBarButtonItem : public QMacCocoaViewContainer
+{
+    Q_OBJECT
+public:
+    CWizMacToolBarButtonItem(const QString& title, int buttonType, int bezelStyle, int width, QWidget* parent = 0);
+
+    QSize sizeHint() const;
+
+    void buttonClicked();
+signals:
+    void triggered(bool);
+
+private:
+    int m_width;
+};
+
+class CWizMacFixedSpacer : public QMacCocoaViewContainer
+{
+    QSize m_sz;
+public:
+    CWizMacFixedSpacer(QSize sz, QWidget* parent = 0);
+
+    void adjustWidth(int width);
+
+    QSize sizeHint() const { return m_sz; }
+};
 
 class CWizMacToolBar
     : public QWidget
@@ -67,12 +95,17 @@ public:
     // Add actions to the Toolbar
     void addAction(QAction* action);
     void addStandardItem(StandardItem standardItem);
-    void addSearch(const QString& label, const QString& tooltip);
+    void addSearch(const QString& label, const QString& tooltip,int width = 250);
     void addWidget(QMacCocoaViewContainer* widget, const QString& label, const QString& tooltip);
+    void addNSToolBarItem();
+
+    void deleteAllToolBarItems();
 
     void onSearchEndEditing(const QString& str);
     //
-    CWizSearchWidget* getSearchWidget();
+    CWizSearchWidget* getSearchWidget();    
+    void adjustSearchWidgetWidth(int nWidth);
+    void adjustWidgetToolBarItemWidth(QWidget* widget, int nWidth);
 
 private:
     void showInWindowImpl(QWidget *window);
